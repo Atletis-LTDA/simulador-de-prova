@@ -696,7 +696,7 @@ if (typeof module !== 'undefined') module.exports = Motor;
 </script>
 
 <script>
-var APP_VERSAO = '4.71', APP_VERSAO_DATA = '18/10/2026';
+var APP_VERSAO = '4.73', APP_VERSAO_DATA = '18/10/2026';
 var LINK_SIMULADOR = 'https://atletis-ltda.github.io/simulador-de-prova/'; // endereço público (GitHub Pages); se mudar, trocar aqui e no cabeçalho do index.html do Pages
 var CHAVE = 'atletis-simulador-de-prova';
 var CORES = ['#7C3AED', '#E5484D', '#0EA5E9', '#D99A00', '#DB2777', '#0F766E'];
@@ -807,7 +807,9 @@ function atletas(){
   });
   S.unificados[pv.id] = true;
   L.forEach(function(x){ // correção no prova.json chega a quem já abriu: a ficha sempre; os ritmos só se a pessoa não mexeu neles
-    var d = x.destaque && (pv.atletas || []).find(function(y){ return y.id === x.destaque; }); if (!d) return;
+    // ritmo digitado antes da máscara: "4,30" era lido como 4,3 min e passa a 4:30; decimal de uma casa ("1,5") segue em minutos (1:30)
+    ['natacao', 't1', 't2', 'corrida'].forEach(function(f){ if (/[.,]/.test(x[f])) x[f] = /^\s*\d{1,2}[.,]\d{2}\s*$/.test(x[f]) ? mascaraRitmo(x[f]) : M.seg(x[f]) > 0 ? M.ritmo(M.seg(x[f])) : x[f]; });
+    var d =x.destaque && (pv.atletas || []).find(function(y){ return y.id === x.destaque; }); if (!d) return;
     x.nomeCompleto = d.nome; x.numero = d.numero || ''; x.categoria = d.categoria || ''; x.equipe = d.equipe || '';
     if (x.orig && ritmos(x) === x.orig) { ['natacao', 't1', 'bike', 't2', 'corrida'].forEach(function(f){ x[f] = d[f]; }); x.ref = d.ref || ''; x.orig = ritmos(d); }
   });
@@ -1409,9 +1411,34 @@ function derivados(pv, a){
       '<div class="cuts">' + cs.map(function(c){ return '<div class="' + (c.ok ? 'ok' : 'bad') + '">' + ic(c.ok ? 'check' : 'alert') + '<span>' + esc(c.corte.texto) + (c.folga != null ? ' · ' + (c.ok ? 'folga de ' + M.duracao(c.folga) : 'passa ' + M.duracao(-c.folga) + ' do limite') : '') + '</span></div>'; }).join('') + '</div>';
 }
 function campo(a, f, rot, val, unid, cls){
-  var ok = f === 'nome' || (f === 'bike' ? Number(String(val).replace(',', '.')) > 0 : M.seg(val) > 0);
+  var ok = campoOk(f, val), r = campoRitmo(f);
   return '<label class="field' + (f === 'nome' ? ' todo' : '') + '"><span class="label">' + rot + '</span>' + (unid ? '<span class="unit" data-u="' + unid + '">' : '') +
-    '<input type="text" class="' + (cls || 'ritmo') + (ok ? '' : ' bad') + '" inputmode="' + (f === 'nome' ? 'text' : 'decimal') + '" data-f="' + f + '" data-id="' + a.id + '" value="' + esc(val) + '"' + (f === 'nome' ? ' maxlength="24"' : '') + '>' + (unid ? '</span>' : '') + '</label>';
+    '<input type="text" class="' + (cls || 'ritmo') + (ok ? '' : ' bad') + '" inputmode="' + (f === 'nome' ? 'text' : r ? 'numeric' : 'decimal') + '" data-f="' + f + '" data-id="' + a.id + '" value="' + esc(val) + '"' + (f === 'nome' ? ' maxlength="24"' : '') + (r ? ' placeholder="0:00" autocomplete="off"' : '') + '>' + (unid ? '</span>' : '') + '</label>';
+}
+// Ritmos em minuto e segundo (natação, T1, T2, corrida): a pessoa digita só os algarismos e a máscara põe os dois-pontos.
+// "455" vira 4:55 e "1030" vira 10:30; vírgula, ponto ou espaço digitados contam como os dois-pontos ("4,30" é 4:30).
+function campoRitmo(f){ return ['natacao', 't1', 't2', 'corrida'].indexOf(f) >= 0; }
+function mascaraRitmo(v){
+  var s = String(v == null ? '' : v).replace(/^\s+/, ''); if (!/\d/.test(s)) return '';
+  var m = /^(\d*)\D+(\d*)/.exec(s);
+  if (m && m[1].length <= 2 && m[2].length <= 2) return (m[1] || '0') + ':' + m[2];
+  var d = s.replace(/\D/g, '').slice(0, 4); // terceiro algarismo dos segundos: os dois-pontos andam ("1:030" vira 10:30)
+  return d.length > 2 ? d.slice(0, -2) + ':' + d.slice(-2) : d;
+}
+function mascarar(t){
+  var v = t.value, novo = mascaraRitmo(v); if (novo === v) return;
+  var pos = t.selectionStart == null ? v.length : t.selectionStart, i = novo.length;
+  if (pos < v.length) { // editando no meio: o cursor fica depois do mesmo número de algarismos
+    var n = v.slice(0, pos).replace(/\D/g, '').length;
+    for (i = 0; n > 0 && i < novo.length; i++) if (/\d/.test(novo[i])) n--;
+  }
+  t.value = novo; try { t.setSelectionRange(i, i); } catch (e) {}
+}
+function campoOk(f, v){
+  if (f === 'nome') return true;
+  if (f === 'bike') return Number(String(v).replace(',', '.')) > 0;
+  var p = String(v == null ? '' : v).split(':');
+  return M.seg(v) > 0 && !(p.length > 1 && +p[1] > 59);
 }
 
 /* ---------- Aba A prova ---------- */
@@ -1433,24 +1460,72 @@ function panelProva(){
 }
 
 /* ---------- WhatsApp ---------- */
+// Com a prova andando, o texto encurta: cada modalidade já feita vira uma linha (natação com largada, saída e ritmo;
+// bike só com a velocidade média; corrida com tempo e ritmo) e os pontos aparecem só no trecho em que o atleta está.
+// Antes da largada continua a lista completa de horários, que serve para combinar onde ficar.
+function mediaTrecho(pv, H, ti){
+  var tr = pv.trechos[ti], hs = H.filter(function(h){ return h.no.ti === ti; }), ini = hs[0], fim = hs[hs.length - 1], dur = fim.eta - ini.eta;
+  if (!(dur > 0) || !(tr.km > 0)) return null;
+  var media = tr.tipo === 'bike' ? kmTxt(tr.km / dur * 3600) + ' km/h' : M.ritmo(dur / (tr.tipo === 'natacao' ? tr.km * 10 : tr.km)) + (tr.tipo === 'natacao' ? '/100 m' : '/km');
+  return { tr: tr, ini: ini, fim: fim, dur: dur, media: media };
+}
+function feitosTrechos(pv, pos){ // modalidades concluídas no horário da posição (transições ficam de fora)
+  return pv.trechos.map(function(tr, ti){ return ti; }).filter(function(ti){ return !M.ehTransicao(pv.trechos[ti]) && (pos.estado === 'fim' || ti < pos.ti); });
+}
+function linhaFeito(pv, H, ti, a){
+  var m = mediaTrecho(pv, H, ti); if (!m) return '';
+  if (m.tr.tipo === 'bike') return '*' + m.tr.nome + '* · média *' + m.media + '*';
+  var inf = function(h){ return h.real || (h.no.i === 0 && a.largada) ? ' (informado)' : ''; };
+  if (m.tr.tipo === 'natacao') return '*' + m.tr.nome + '* ' + M.relogio(m.ini.eta) + inf(m.ini) + ' a ' + M.relogio(m.fim.eta) + inf(m.fim) + ' · ' + M.duracao(m.dur) + ' · média *' + m.media + '*';
+  return '*' + m.tr.nome + '* · ' + M.duracao(m.dur) + ' · média *' + m.media + '*';
+}
+function curtoFeito(pv, H, ti){ // versão de uma linha por atleta, para o modo Todos
+  var m = mediaTrecho(pv, H, ti); if (!m) return '';
+  return m.tr.nome + ' ' + (m.tr.tipo === 'bike' ? m.media : M.duracao(m.dur) + ' (' + m.media + ')');
+}
+function ondeAgora(pv, pos){
+  var tr = pv.trechos[pos.ti];
+  return pos.estado === 'transicao' ? tr.nome + ' (transição)' : tr.nome + ', km ' + kmTxt(pos.km) + ' de ' + kmTxt(tr.km);
+}
 function textoWaTodos(){
-  var pv = prova(), L = atletas(), N = M.nos(pv);
-  var chave = function(tipo, fim){ return N.find(function(n){ return pv.trechos[n.ti].tipo === tipo && n.fim === fim && (fim || n.km === 0); }); };
-  var marcos = [[N[0], 'Largada'], [chave('natacao', true), 'Saída da água'], [chave('bike', true), 'Chegada da bike'], [chave('corrida', true), 'Chegada']].filter(function(m){ return m[0]; });
-  var blocos = L.map(function(x){
-    var H = M.horarios(pv, x), nm = String(x.nome || '').replace(/[*_~`]/g, '').trim() || 'Atleta';
-    return '*' + nm + '*' + (x.numero && daProva(x) ? ' (' + x.numero + ')' : '') + '\n' + marcos.map(function(m){ return m[1] + ' *' + M.relogio(H[m[0].i].eta) + '*'; }).join(' · ');
+  var pv = prova(), L = atletas(), N = M.nos(pv), t = tempo(), link = LINK_SIMULADOR ? '\n*Acompanhe ao vivo no mapa:* ' + LINK_SIMULADOR : '';
+  var P = L.map(function(x){ return M.posicao(pv, x, t); });
+  var nome = function(x){ return '*' + (String(x.nome || '').replace(/[*_~`]/g, '').trim() || 'Atleta') + '*' + (x.numero && daProva(x) ? ' (' + x.numero + ')' : ''); };
+  if (P.every(function(p){ return p.estado === 'antes'; })) {
+    var chave = function(tipo, fim){ return N.find(function(n){ return pv.trechos[n.ti].tipo === tipo && n.fim === fim && (fim || n.km === 0); }); };
+    var marcos = [[N[0], 'Largada'], [chave('natacao', true), 'Saída da água'], [chave('bike', true), 'Chegada da bike'], [chave('corrida', true), 'Chegada']].filter(function(m){ return m[0]; });
+    return '*Horários da turma*\n' + pv.nome + ' · ' + dataLonga(pv.data) + '\n\n' + L.map(function(x, i){ var H = P[i].H; return nome(x) + '\n' + marcos.map(function(m){ return m[1] + ' *' + M.relogio(H[m[0].i].eta) + '*'; }).join(' · '); }).join('\n\n') +
+      '\n\n_Estimativa pelos ritmos médios; pode variar._' + link;
+  }
+  var fim = P.every(function(p){ return p.estado === 'fim'; });
+  var blocos = L.map(function(x, i){
+    var pos = P[i], H = pos.H, cheg = H[H.length - 1];
+    if (pos.estado === 'antes') return nome(x) + '\nAinda não largou · largada *' + M.relogio(H[0].eta) + '*';
+    var feitos = feitosTrechos(pv, pos).map(function(ti){ return curtoFeito(pv, H, ti); }).filter(Boolean).join(' · ');
+    if (pos.estado === 'fim') return nome(x) + (feitos ? '\n' + feitos : '') + '\nChegada *' + M.relogio(cheg.eta) + '*' + (cheg.real ? ' (informado)' : '') + ' · total ' + M.duracao(cheg.eta - H[0].eta);
+    var nx = pos.proximo && pos.proximo !== cheg ? pos.proximo : null;
+    return nome(x) + (feitos ? '\n' + feitos : '') + '\nAgora: ' + ondeAgora(pv, pos) + (nx ? ' · ' + nx.no.ponto.nome + ' *' + M.relogio(nx.eta) + '*' : '') + ' · chegada *' + M.relogio(cheg.eta) + '*';
   });
-  return '*Horários da turma*\n' + pv.nome + ' · ' + dataLonga(pv.data) + '\n\n' + blocos.join('\n\n') +
-    '\n\n_Estimativa pelos ritmos médios; pode variar._' + (LINK_SIMULADOR ? '\n*Acompanhe ao vivo no mapa:* ' + LINK_SIMULADOR : '');
+  return (fim ? '*Resumo da turma*\n' + pv.nome + ' · ' + dataLonga(pv.data) : '*Parcial da turma*\n' + pv.nome + ' · ' + M.relogio(t)) + '\n\n' + blocos.join('\n\n') +
+    '\n\n_Estimativa pelos ritmos médios; pode variar._' + link;
 }
 function textoWa(){
   if (todos()) return textoWaTodos();
-  var pv = prova(), a = atual(), H = M.horarios(pv, a), nm = String(a.nome || '').replace(/[*_~`]/g, '').trim(); // * _ ~ ` quebrariam o negrito
+  var pv = prova(), a = atual(), t = tempo(), pos = M.posicao(pv, a, t), H = pos.H, nm = String(a.nome || '').replace(/[*_~`]/g, '').trim() || 'nosso atleta'; // * _ ~ ` quebrariam o negrito
   // Formatação do WhatsApp: *negrito* no título e nos horários, _itálico_ no aviso.
-  var linhas = H.filter(function(h){ return h.no.ponto && (h.no.ponto.destaque || h.real); }).map(function(h){ return '*' + M.relogio(h.eta) + '* · ' + h.no.ponto.nome + (h.real || (h.no.i === 0 && a.largada) ? ' (informado)' : ''); });
-  return '*Horários de ' + (nm || 'nosso atleta') + '*\n' + pv.nome + ' · ' + dataLonga(pv.data) + '\n\n' + linhas.join('\n') +
-    '\n\n_Estimativa pelos ritmos médios; pode variar._' + (LINK_SIMULADOR ? '\n*Acompanhe ao vivo no mapa:* ' + LINK_SIMULADOR + (daProva(a) ? '#' + a.destaque : '') : '');
+  var rodape = '\n\n_Estimativa pelos ritmos médios; pode variar._' + (LINK_SIMULADOR ? '\n*Acompanhe ao vivo no mapa:* ' + LINK_SIMULADOR + (daProva(a) ? '#' + a.destaque : '') : '');
+  var marcado = function(h){ return h.no.ponto && (h.no.ponto.destaque || h.real); };
+  var linha = function(h){ var hr = M.relogio(h.eta); return (h.eta > t ? '*' + hr + '*' : hr) + ' · ' + h.no.ponto.nome + (h.real || (h.no.i === 0 && a.largada) ? ' (informado)' : ''); }; // previsto em negrito
+  if (pos.estado === 'antes') return '*Horários de ' + nm + '*\n' + pv.nome + ' · ' + dataLonga(pv.data) + '\n\n' + H.filter(marcado).map(linha).join('\n') + rodape;
+  var feitos = feitosTrechos(pv, pos).map(function(ti){ return linhaFeito(pv, H, ti, a); }).filter(Boolean), cheg = H[H.length - 1];
+  if (pos.estado === 'fim') return '*Resumo de ' + nm + '*\n' + pv.nome + ' · ' + dataLonga(pv.data) + '\n\n' + feitos.join('\n') +
+    '\n\n*Chegada* ' + M.relogio(cheg.eta) + (cheg.real ? ' (informado)' : '') + ' · total *' + M.duracao(cheg.eta - H[0].eta) + '*' + rodape;
+  // Trecho de agora: os pontos dele (na transição, os da modalidade seguinte) e a chegada prevista, se ainda não apareceu.
+  var tiFoco = pos.estado === 'transicao' && pos.ti + 1 < pv.trechos.length ? pos.ti + 1 : pos.ti;
+  var foco = H.filter(function(h){ return h.no.ti === tiFoco && marcado(h) && (pos.estado !== 'transicao' || h.eta > t); });
+  if (!foco.length && pos.proximo) foco = [pos.proximo];
+  return '*Parcial de ' + nm + '*\n' + pv.nome + ' · ' + M.relogio(t) + '\n\n' + (feitos.length ? feitos.join('\n') + '\n\n' : '') +
+    '*Agora: ' + ondeAgora(pv, pos) + '*\n' + foco.map(linha).join('\n') + (foco.indexOf(cheg) < 0 ? '\nChegada prevista *' + M.relogio(cheg.eta) + '*' : '') + rodape;
 }
 function atualizarWa(){
   var href = 'https://wa.me/?text=' + encodeURIComponent(textoWa());
@@ -1529,8 +1604,9 @@ document.addEventListener('input', function(e){
   if (t.id === 'sim-range') { S.sim = +t.value; salvar(); atualizarAgora(); if (S.vista === 'seguir') irPara('seguir', true); return; }
   if (t.hasAttribute('data-f') && t.type === 'text') {
     var f = t.getAttribute('data-f');
+    if (campoRitmo(f)) mascarar(t);
     mudarAtleta(t.getAttribute('data-id'), f, t.value);
-    var ok = f === 'nome' || (f === 'bike' ? Number(t.value.replace(',', '.')) > 0 : M.seg(t.value) > 0);
+    var ok = campoOk(f, t.value);
     t.classList.toggle('bad', !ok);
     if (ok) atualizarDerivados(t.getAttribute('data-id'));
   }
@@ -1581,7 +1657,9 @@ document.addEventListener('change', function(e){
     return;
   }
   if (t.hasAttribute('data-f')) {
+    var fr = t.getAttribute('data-f'), nv;
     if (t.type === 'time') mudarAtleta(t.getAttribute('data-id'), 'largada', t.value);
+    else if (campoRitmo(fr) && campoOk(fr, t.value) && (nv = M.ritmo(M.seg(t.value))) !== t.value) { t.value = nv; mudarAtleta(t.getAttribute('data-id'), fr, nv); } // ao sair do campo: "4:3" fica 4:03 e "45" fica 45:00
     atualizarDerivados(t.getAttribute('data-id'));
     return;
   }
