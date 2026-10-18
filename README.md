@@ -10,6 +10,7 @@ Endereço: https://atletis-ltda.github.io/simulador-de-prova/
 
 - `index.html`: a página inteira.
 - `og.png`: imagem de preview (1200x630) para WhatsApp, Instagram e redes.
+- `favicon.ico`, `favicon-32.png`, `apple-touch-icon.png`: ícone do A da Atletis (aba do navegador e tela inicial do celular).
 - `.nojekyll`: faz o GitHub Pages servir os arquivos como estão.
 
 ## Publicar
