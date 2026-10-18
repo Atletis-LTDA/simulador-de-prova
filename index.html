@@ -655,7 +655,7 @@ if (typeof module !== 'undefined') module.exports = Motor;
 </script>
 
 <script>
-var APP_VERSAO = '1.03', APP_VERSAO_DATA = '17/10/2026';
+var APP_VERSAO = '1.04', APP_VERSAO_DATA = '18/10/2026';
 var LINK_SIMULADOR = 'https://atletis-ltda.github.io/simulador-de-prova/'; // endereço público; ao mudar de domínio, trocar aqui e no og:url/canonical
 var CHAVE = 'atletis-simulador-de-prova';
 var CORES = ['#7C3AED', '#E5484D', '#0EA5E9', '#D99A00', '#DB2777', '#0F766E'];
@@ -1020,8 +1020,14 @@ function criarMapa(pv){
 }
 function escala(mapa){ // unidades do viewBox por pixel de tela
   var r = mapa.svg.getBoundingClientRect(), vb = mapa.vb;
-  if (!vb || !r.width) return 1;
-  return Math.max(vb[2] / r.width, vb[3] / r.height);
+  var e = vb && r.width && r.height ? Math.max(vb[2] / r.width, vb[3] / r.height) : NaN;
+  if (isFinite(e) && e > 0) { mapa.reagendado = false; return e; }
+  // SVG ainda sem layout (largura ou altura 0): usa 1 agora e redesenha uma vez no próximo quadro, com a medida real.
+  if (!mapa.reagendado && mapa.desenharFixos) {
+    mapa.reagendado = true;
+    requestAnimationFrame(function(){ if (document.body.contains(mapa.svg)) mapa.desenharFixos(); });
+  }
+  return 1;
 }
 function definirVb(mapa, vb){
   mapa.vb = vb; mapa.svg.setAttribute('viewBox', vb.map(function(v){ return v.toFixed(1); }).join(' '));
