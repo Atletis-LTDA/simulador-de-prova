@@ -2,7 +2,7 @@
 
 Página única (HTML, CSS e JS num só arquivo) que mostra onde o atleta está agora, a que horas passa em cada ponto do percurso e onde ficar para torcer. Sem backend e sem captura de dados. O estado fica só no navegador de quem usa (localStorage).
 
-Versão publicada: 4.71.
+Versão publicada: 4.73.
 
 Endereço: https://atletis-ltda.github.io/simulador-de-prova/
 
