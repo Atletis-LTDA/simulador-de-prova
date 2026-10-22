@@ -6,7 +6,7 @@ Endereço antigo (redireciona): https://atletis-ltda.github.io/simulador-de-prov
 
 ## Endereço
 
-O simulador vive no app da Atletis: https://apps.atletis.com.br/simulador (versão 4.74). O código fica em `mvps/materiais-ricos-2026-10-22/src/simulador.html` do repositório `Atletis-LTDA/atletis-prototipos`, e a publicação é feita pela Vercel.
+O simulador vive no app da Atletis: https://apps.atletis.com.br/tracker (versão 4.74). O código fica em `mvps/materiais-ricos-2026-10-22/src/simulador.html` do repositório `Atletis-LTDA/atletis-prototipos`, e a publicação é feita pela Vercel.
 
 Este repositório só guarda o redirect: `index.html` leva o acesso antigo para o app, mantendo o `#atleta` e a busca. Não gere este `index.html` de novo a partir da base de conhecimento: isso desfaz o redirect.
 
