@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador de Prova Atletis · novo endereço</title>
+<link rel="canonical" href="https://apps.atletis.com.br/tracker">
+<meta name="robots" content="noindex">
+<meta http-equiv="refresh" content="1;url=https://apps.atletis.com.br/tracker">
+<meta name="theme-color" content="#FF6F00">
+<style>
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;box-sizing:border-box;font:16px/1.5 system-ui,-apple-system,sans-serif;background:#fff;color:#121212}
+main{max-width:420px;text-align:center}
+a{color:#E66400;font-weight:600}
+</style>
+</head>
+<body>
+<main>
+<p>O Simulador de Prova mudou de endereço.</p>
+<p><a id="destino" href="https://apps.atletis.com.br/tracker">Abrir no novo endereço</a></p>
+</main>
+<script>
+// Leva para o app mantendo o atleta (#mika), a busca (?) e o que vier depois.
+(function () {
+  var destino = 'https://apps.atletis.com.br/tracker' + location.search + location.hash;
+  document.getElementById('destino').href = destino;
+  location.replace(destino);
+})();
+</script>
+</body>
+</html>
